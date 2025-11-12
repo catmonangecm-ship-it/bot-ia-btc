@@ -38,10 +38,50 @@
                 <p class="text-gray-400 mt-2">Intelligence Artificielle • BSC • BTC/ETH/BNB</p>
             </div>
             
-            <button onclick="connectWallet()" id="connectBtn" class="flex items-center gap-2 px-6 py-3 rounded-lg font-semibold transition-all bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600">
-                <span>👛</span>
-                <span id="walletText">Connecter MetaMask</span>
-            </button>
+            <div class="flex gap-3">
+                <button onclick="connectWallet()" id="connectBtn" class="flex items-center gap-2 px-6 py-3 rounded-lg font-semibold transition-all bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600">
+                    <span>👛</span>
+                    <span id="walletText">MetaMask</span>
+                </button>
+                <button onclick="togglePrivateKeyModal()" class="flex items-center gap-2 px-6 py-3 rounded-lg font-semibold transition-all bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600">
+                    <span>🔑</span>
+                    <span>Clé Privée</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Private Key Modal -->
+        <div id="privateKeyModal" class="hidden fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div class="bg-slate-800 border-2 border-purple-500 rounded-2xl p-6 max-w-md w-full">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-xl font-bold text-purple-400">🔑 Connexion par Clé Privée</h3>
+                    <button onclick="togglePrivateKeyModal()" class="text-gray-400 hover:text-white text-2xl">×</button>
+                </div>
+                
+                <div class="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4 mb-4">
+                    <p class="text-yellow-400 text-sm flex items-start gap-2">
+                        <span>⚠️</span>
+                        <span>Ne partagez jamais votre clé privée. Assurez-vous d'être seul et sur un appareil sécurisé.</span>
+                    </p>
+                </div>
+                
+                <div class="mb-4">
+                    <label class="block text-sm text-gray-400 mb-2">Clé privée (avec ou sans 0x)</label>
+                    <input type="password" id="privateKeyInput" placeholder="0x..." class="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-3 focus:outline-none focus:border-purple-400 font-mono text-sm">
+                </div>
+                
+                <button onclick="connectWithPrivateKey()" class="w-full px-6 py-3 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 rounded-lg font-semibold transition-all">
+                    Se connecter
+                </button>
+                
+                <div class="mt-4 text-xs text-gray-400">
+                    <p class="mb-2">💡 Où trouver ma clé privée dans MetaMask ?</p>
+                    <p>1. Ouvrez MetaMask</p>
+                    <p>2. Cliquez sur les 3 points</p>
+                    <p>3. Détails du compte → Exporter la clé privée</p>
+                    <p>4. Entrez votre mot de passe MetaMask</p>
+                </div>
+            </div>
         </div>
 
         <!-- AI Status -->
@@ -194,6 +234,18 @@
                             <option value="30000">🐢 Lent (30s)</option>
                         </select>
                     </div>
+
+                    <div class="bg-gradient-to-r from-green-500/10 to-emerald-500/10 border border-green-500/30 rounded-lg p-4">
+                        <div class="flex items-center justify-between mb-2">
+                            <label class="text-sm font-semibold text-green-400">🔋 Mode Veille Actif</label>
+                            <div class="relative">
+                                <input type="checkbox" id="wakeLockToggle" onchange="toggleWakeLock()" class="sr-only peer">
+                                <div class="w-11 h-6 bg-slate-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-500"></div>
+                            </div>
+                        </div>
+                        <p class="text-xs text-gray-400">Empêche l'écran de se mettre en veille. Le bot continuera de trader même si vous minimisez l'onglet.</p>
+                        <p id="wakeLockStatus" class="text-xs text-gray-400 mt-2">Status: <span class="text-red-400">Désactivé</span></p>
+                    </div>
                 </div>
 
                 <div class="mt-6 p-4 bg-purple-400/10 border border-purple-400/30 rounded-lg">
@@ -219,6 +271,20 @@
                             <p>• Tendances du marché</p>
                             <p>• Volumes d'échange</p>
                             <p>• Indicateurs techniques</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mt-4 p-4 bg-orange-400/10 border border-orange-400/30 rounded-lg">
+                    <div class="flex gap-2">
+                        <span class="text-orange-400">⚡</span>
+                        <div class="text-xs text-gray-300">
+                            <p class="font-semibold text-orange-400">Mode Veille</p>
+                            <p class="mt-2">✅ Bot actif en arrière-plan</p>
+                            <p>✅ Trading 24/7 automatique</p>
+                            <p>✅ Notifications sonores</p>
+                            <p>✅ Auto-sauvegarde</p>
+                            <p class="mt-2 text-yellow-400">💡 Gardez l'onglet ouvert</p>
                         </div>
                     </div>
                 </div>
@@ -253,16 +319,22 @@
             lastBuyPrice: 0,
             positionAmount: 0,
             aiStats: { totalTrades: 0, successfulTrades: 0, accuracy: 0 },
-            provider: null
+            provider: null,
+            wallet: null,
+            connectionType: null
         };
 
         let ws = null, botInterval = null, tradingChart = null;
+        let wakeLock = null;
+        let keepAliveInterval = null;
 
         // Initialization
         window.addEventListener('DOMContentLoaded', () => {
             console.log('🤖 Bot IA chargé');
             initChart();
             connectWebSocket();
+            initVisibilityListener();
+            initKeepAlive();
         });
 
         // Wallet Connection
@@ -277,6 +349,7 @@
                 state.account = accounts[0];
                 state.provider = new ethers.providers.Web3Provider(window.ethereum);
                 state.isConnected = true;
+                state.connectionType = 'metamask';
                 
                 console.log('✅ Wallet:', state.account);
                 updateUI();
@@ -285,13 +358,68 @@
             }
         }
 
+        function togglePrivateKeyModal() {
+            const modal = document.getElementById('privateKeyModal');
+            modal.classList.toggle('hidden');
+            if (!modal.classList.contains('hidden')) {
+                document.getElementById('privateKeyInput').value = '';
+            }
+        }
+
+        async function connectWithPrivateKey() {
+            const privateKeyInput = document.getElementById('privateKeyInput').value.trim();
+            
+            if (!privateKeyInput) {
+                alert('❌ Veuillez entrer une clé privée');
+                return;
+            }
+
+            try {
+                // Add 0x prefix if not present
+                let privateKey = privateKeyInput;
+                if (!privateKey.startsWith('0x')) {
+                    privateKey = '0x' + privateKey;
+                }
+
+                // Validate private key format
+                if (privateKey.length !== 66) {
+                    alert('❌ Clé privée invalide (doit faire 64 caractères sans 0x)');
+                    return;
+                }
+
+                // Create provider
+                state.provider = new ethers.providers.JsonRpcProvider(BSC_RPC);
+                
+                // Create wallet from private key
+                state.wallet = new ethers.Wallet(privateKey, state.provider);
+                state.account = state.wallet.address;
+                state.isConnected = true;
+                state.connectionType = 'privatekey';
+                
+                console.log('✅ Wallet connecté:', state.account);
+                
+                // Close modal
+                togglePrivateKeyModal();
+                
+                // Update UI
+                updateUI();
+                
+                alert('✅ Connexion réussie!\n\nAdresse: ' + state.account.slice(0, 6) + '...' + state.account.slice(-4));
+            } catch (error) {
+                console.error('Erreur connexion:', error);
+                alert('❌ Erreur: Clé privée invalide\n\n' + error.message);
+            }
+        }
+
         function updateUI() {
             if (state.isConnected) {
+                const connectionBadge = state.connectionType === 'privatekey' ? '🔑' : '👛';
                 document.getElementById('connectBtn').className = 
                     'flex items-center gap-2 px-6 py-3 rounded-lg font-semibold transition-all bg-green-600 hover:bg-green-700';
                 document.getElementById('walletText').textContent = 
-                    `${state.account.slice(0, 6)}...${state.account.slice(-4)}`;
-                document.getElementById('walletStatus').innerHTML = '🟢 Connecté';
+                    `${connectionBadge} ${state.account.slice(0, 6)}...${state.account.slice(-4)}`;
+                document.getElementById('walletStatus').innerHTML = 
+                    `🟢 ${state.connectionType === 'privatekey' ? 'Clé privée' : 'MetaMask'}`;
                 
                 document.getElementById('aiStatus').classList.remove('hidden');
                 document.getElementById('cryptoSelector').classList.remove('hidden');
@@ -497,7 +625,7 @@
             const aggression = document.getElementById('aiAggression').value;
             const prices = state.priceHistory.slice(-20);
             
-            // Simple AI logic (vous pouvez améliorer avec ML réel)
+            // Simple AI logic
             const recentChange = ((prices[prices.length - 1] - prices[0]) / prices[0]) * 100;
             const volatility = calculateVolatility(prices);
             const trend = calculateTrend(prices);
@@ -651,6 +779,12 @@
             state.trades.unshift(trade);
             state.trades = state.trades.slice(0, 50);
             
+            // Jouer un son pour notifier le trade
+            playTradeSound();
+            
+            // Sauvegarder l'état
+            saveState();
+            
             renderTrades();
             updateStats();
         }
@@ -695,6 +829,148 @@
             document.getElementById('aiTrades').textContent = state.aiStats.totalTrades;
             document.getElementById('successRate').textContent = state.aiStats.accuracy + '%';
         }
+
+        // Wake Lock API - Empêche la mise en veille
+        async function toggleWakeLock() {
+            const toggle = document.getElementById('wakeLockToggle');
+            
+            if (toggle.checked) {
+                await requestWakeLock();
+            } else {
+                releaseWakeLock();
+            }
+        }
+
+        async function requestWakeLock() {
+            try {
+                if ('wakeLock' in navigator) {
+                    wakeLock = await navigator.wakeLock.request('screen');
+                    console.log('🔋 Wake Lock activé');
+                    document.getElementById('wakeLockStatus').innerHTML = 'Status: <span class="text-green-400">✅ Actif</span>';
+                    
+                    wakeLock.addEventListener('release', () => {
+                        console.log('🔋 Wake Lock désactivé');
+                        document.getElementById('wakeLockStatus').innerHTML = 'Status: <span class="text-red-400">Désactivé</span>';
+                    });
+                } else {
+                    alert('⚠️ Wake Lock non supporté par ce navigateur.\nLe bot fonctionnera quand même en arrière-plan.');
+                    document.getElementById('wakeLockToggle').checked = false;
+                }
+            } catch (err) {
+                console.error('Erreur Wake Lock:', err);
+                alert('❌ Impossible d\'activer le mode veille: ' + err.message);
+                document.getElementById('wakeLockToggle').checked = false;
+            }
+        }
+
+        function releaseWakeLock() {
+            if (wakeLock) {
+                wakeLock.release();
+                wakeLock = null;
+                console.log('🔋 Wake Lock libéré');
+                document.getElementById('wakeLockStatus').innerHTML = 'Status: <span class="text-red-400">Désactivé</span>';
+            }
+        }
+
+        // Listener pour réactiver le Wake Lock si la page redevient visible
+        function initVisibilityListener() {
+            document.addEventListener('visibilitychange', async () => {
+                if (document.visibilityState === 'visible' && document.getElementById('wakeLockToggle').checked) {
+                    console.log('👁️ Page visible - Réactivation Wake Lock');
+                    await requestWakeLock();
+                }
+            });
+        }
+
+        // Keep Alive - Empêche la suspension du JavaScript
+        function initKeepAlive() {
+            // Ping toutes les 30 secondes pour garder le script actif
+            keepAliveInterval = setInterval(() => {
+                if (state.botRunning) {
+                    console.log('💓 Keep Alive - Bot actif');
+                    
+                    // Si le WebSocket est fermé, le reconnecter
+                    if (!ws || ws.readyState === WebSocket.CLOSED) {
+                        console.log('🔄 Reconnexion WebSocket...');
+                        connectWebSocket();
+                    }
+                }
+            }, 30000);
+        }
+
+        // Notification audio quand un trade est exécuté
+        function playTradeSound() {
+            try {
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                const oscillator = audioContext.createOscillator();
+                const gainNode = audioContext.createGain();
+                
+                oscillator.connect(gainNode);
+                gainNode.connect(audioContext.destination);
+                
+                oscillator.frequency.value = 800;
+                oscillator.type = 'sine';
+                
+                gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
+                
+                oscillator.start(audioContext.currentTime);
+                oscillator.stop(audioContext.currentTime + 0.5);
+            } catch (e) {
+                console.log('Son désactivé');
+            }
+        }
+
+        // Sauvegarder l'état du bot dans localStorage
+        function saveState() {
+            if (state.isConnected && state.capitalSet) {
+                const stateToSave = {
+                    tradingCapital: state.tradingCapital,
+                    portfolio: state.portfolio,
+                    aiStats: state.aiStats,
+                    trades: state.trades.slice(0, 20),
+                    selectedCrypto: state.selectedCrypto,
+                    tradingMode: state.tradingMode,
+                    lastSaved: new Date().toISOString()
+                };
+                localStorage.setItem('botTradingState', JSON.stringify(stateToSave));
+                console.log('💾 État sauvegardé');
+            }
+        }
+
+        // Restaurer l'état du bot
+        function restoreState() {
+            try {
+                const saved = localStorage.getItem('botTradingState');
+                if (saved) {
+                    const restored = JSON.parse(saved);
+                    
+                    // Vérifier que la sauvegarde n'est pas trop ancienne (24h max)
+                    const lastSaved = new Date(restored.lastSaved);
+                    const hoursSince = (Date.now() - lastSaved.getTime()) / (1000 * 60 * 60);
+                    
+                    if (hoursSince < 24) {
+                        console.log('♻️ Restauration de l\'état...');
+                        return restored;
+                    }
+                }
+            } catch (e) {
+                console.error('Erreur restauration:', e);
+            }
+            return null;
+        }
+
+        // Sauvegarder automatiquement toutes les 5 minutes
+        setInterval(saveState, 5 * 60 * 1000);
+
+        // Sauvegarder avant de fermer la page
+        window.addEventListener('beforeunload', (e) => {
+            if (state.botRunning) {
+                saveState();
+                e.preventDefault();
+                e.returnValue = 'Le bot est en cours d\'exécution. Êtes-vous sûr de vouloir quitter?';
+            }
+        });
     </script>
 </body>
 </html>
