@@ -295,6 +295,7 @@
     <script>
         const PANCAKE_ROUTER = '0x10ED43C718714eb63d5aA57B78B54704E256024E';
         const USDT_CONTRACT = '0x55d398326f99059fF775485246999027B3197955';
+        const WBNB_CONTRACT = '0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c';
         const BSC_RPC = 'https://bsc-dataseed1.binance.org';
         
         const TOKEN_ADDRESSES = {
@@ -302,6 +303,22 @@
             'ETHUSDT': '0x2170Ed0880ac9A755fd29B2688956BD959F933F8',
             'BNBUSDT': '0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c'
         };
+
+        // PancakeSwap Router ABI (fonctions essentielles)
+        const ROUTER_ABI = [
+            'function swapExactTokensForTokens(uint amountIn, uint amountOutMin, address[] calldata path, address to, uint deadline) external returns (uint[] memory amounts)',
+            'function swapExactETHForTokens(uint amountOutMin, address[] calldata path, address to, uint deadline) external payable returns (uint[] memory amounts)',
+            'function swapExactTokensForETH(uint amountIn, uint amountOutMin, address[] calldata path, address to, uint deadline) external returns (uint[] memory amounts)',
+            'function getAmountsOut(uint amountIn, address[] memory path) public view returns (uint[] memory amounts)'
+        ];
+
+        // ERC20 ABI (fonctions essentielles)
+        const ERC20_ABI = [
+            'function approve(address spender, uint256 amount) public returns (bool)',
+            'function allowance(address owner, address spender) public view returns (uint256)',
+            'function balanceOf(address account) public view returns (uint256)',
+            'function decimals() public view returns (uint8)'
+        ];
 
         let state = {
             account: null,
@@ -321,7 +338,12 @@
             aiStats: { totalTrades: 0, successfulTrades: 0, accuracy: 0 },
             provider: null,
             wallet: null,
-            connectionType: null
+            connectionType: null,
+            realTrading: {
+                approvedTokens: {},
+                pendingTx: null,
+                lastGasPrice: null
+            }
         };
 
         let ws = null, botInterval = null, tradingChart = null;
@@ -486,6 +508,34 @@
 
         function changeTradingMode() {
             state.tradingMode = document.getElementById('tradingMode').value;
+            
+            if (state.tradingMode === 'real') {
+                const confirmed = confirm(
+                    '⚠️ ATTENTION - MODE TRADING RÉEL ⚠️\n\n' +
+                    '✅ Vous allez effectuer de VRAIS trades sur PancakeSwap\n' +
+                    '✅ De l\'ARGENT RÉEL sera échangé\n' +
+                    '✅ Des frais de gas seront payés en BNB\n' +
+                    '✅ Les transactions sont IRRÉVERSIBLES\n' +
+                    '✅ Risque de PERTE financière\n\n' +
+                    'Êtes-vous sûr de vouloir continuer ?'
+                );
+                
+                if (!confirmed) {
+                    document.getElementById('tradingMode').value = 'simulation';
+                    state.tradingMode = 'simulation';
+                    return;
+                }
+                
+                alert(
+                    '💡 CONSEILS IMPORTANTS :\n\n' +
+                    '1. Assurez-vous d\'avoir du BNB pour les frais de gas\n' +
+                    '2. Commencez avec de petites sommes\n' +
+                    '3. Le bot va approuver les tokens automatiquement\n' +
+                    '4. Surveillez vos transactions sur BSCScan\n' +
+                    '5. Vous pouvez arrêter le bot à tout moment\n\n' +
+                    'Le mode réel est maintenant ACTIVÉ ! 🚀'
+                );
+            }
         }
 
         // Chart
@@ -731,6 +781,18 @@
             console.log(`📊 Raison: ${decision.reason}`);
             console.log(`🎯 Confiance: ${(decision.confidence * 100).toFixed(0)}%`);
             
+            // Mode RÉEL
+            if (state.tradingMode === 'real') {
+                executeRealTrade(tradeType, amount, decision);
+            } 
+            // Mode SIMULATION
+            else {
+                executeSimulatedTrade(tradeType, amount, decision);
+            }
+        }
+
+        // SIMULATION MODE
+        function executeSimulatedTrade(tradeType, amount, decision) {
             let profit = 0;
             let profitPercent = 0;
             let success = false;
@@ -772,21 +834,253 @@
                 profitPercent: profitPercent.toFixed(2),
                 confidence: (decision.confidence * 100).toFixed(0),
                 reason: decision.reason,
-                mode: state.tradingMode,
-                success: success
+                mode: 'simulation',
+                success: success,
+                txHash: null
             };
             
             state.trades.unshift(trade);
             state.trades = state.trades.slice(0, 50);
             
-            // Jouer un son pour notifier le trade
             playTradeSound();
-            
-            // Sauvegarder l'état
             saveState();
-            
             renderTrades();
             updateStats();
+        }
+
+        // REAL TRADING MODE
+        async function executeRealTrade(tradeType, amount, decision) {
+            try {
+                if (!state.provider || !state.account) {
+                    alert('❌ Wallet non connecté');
+                    return;
+                }
+
+                // Vérifier si transaction en cours
+                if (state.realTrading.pendingTx) {
+                    console.log('⏳ Transaction déjà en cours...');
+                    return;
+                }
+
+                const signer = state.wallet || state.provider.getSigner();
+                const tokenAddress = TOKEN_ADDRESSES[state.selectedCrypto];
+                
+                let txHash = null;
+                let success = false;
+                let profit = 0;
+                let profitPercent = 0;
+
+                if (tradeType === 'BUY') {
+                    // ACHAT RÉEL
+                    console.log('💎 Exécution ACHAT RÉEL...');
+                    txHash = await executeBuyOnPancakeSwap(signer, tokenAddress, amount);
+                    
+                    if (txHash) {
+                        state.currentPosition = 'BUY';
+                        state.lastBuyPrice = state.currentPrice;
+                        state.positionAmount = amount;
+                        document.getElementById('positionStatus').innerHTML = '🟢 Long (RÉEL)';
+                        success = true;
+                    }
+                } else {
+                    // VENTE RÉELLE
+                    console.log('💎 Exécution VENTE RÉELLE...');
+                    txHash = await executeSellOnPancakeSwap(signer, tokenAddress, state.positionAmount);
+                    
+                    if (txHash && state.currentPosition) {
+                        profitPercent = ((state.currentPrice - state.lastBuyPrice) / state.lastBuyPrice) * 100;
+                        profit = state.positionAmount * (profitPercent / 100);
+                        state.portfolio.profit += profit;
+                        
+                        success = profit > 0;
+                        if (success) state.aiStats.successfulTrades++;
+                        
+                        state.currentPosition = null;
+                        document.getElementById('positionStatus').innerHTML = '⚪ Aucune';
+                    }
+                }
+
+                // Update stats
+                state.aiStats.totalTrades++;
+                state.aiStats.accuracy = state.aiStats.totalTrades > 0 
+                    ? (state.aiStats.successfulTrades / state.aiStats.totalTrades * 100).toFixed(0) 
+                    : 0;
+
+                const trade = {
+                    id: Date.now(),
+                    time: new Date().toLocaleTimeString('fr-FR'),
+                    date: new Date().toLocaleDateString('fr-FR'),
+                    type: tradeType,
+                    pair: state.selectedCrypto,
+                    amount: amount.toFixed(2),
+                    entryPrice: state.currentPrice.toFixed(6),
+                    profit: profit.toFixed(2),
+                    profitPercent: profitPercent.toFixed(2),
+                    confidence: (decision.confidence * 100).toFixed(0),
+                    reason: decision.reason,
+                    mode: 'real',
+                    success: success,
+                    txHash: txHash
+                };
+
+                state.trades.unshift(trade);
+                state.trades = state.trades.slice(0, 50);
+
+                playTradeSound();
+                saveState();
+                renderTrades();
+                updateStats();
+
+                if (txHash) {
+                    alert(`✅ Transaction réussie!\n\nTx: ${txHash.slice(0, 10)}...${txHash.slice(-8)}\n\nVoir sur BSCScan: https://bscscan.com/tx/${txHash}`);
+                }
+
+            } catch (error) {
+                console.error('❌ Erreur trade réel:', error);
+                alert(`❌ Erreur lors du trade:\n\n${error.message}\n\nLe bot continue en mode simulation.`);
+            }
+        }
+
+        // ACHETER sur PancakeSwap
+        async function executeBuyOnPancakeSwap(signer, tokenAddress, usdtAmount) {
+            try {
+                console.log('🔄 Préparation achat PancakeSwap...');
+                
+                const routerContract = new ethers.Contract(PANCAKE_ROUTER, ROUTER_ABI, signer);
+                const usdtContract = new ethers.Contract(USDT_CONTRACT, ERC20_ABI, signer);
+                
+                // Convertir montant en Wei (USDT a 18 decimals sur BSC)
+                const amountIn = ethers.utils.parseUnits(usdtAmount.toString(), 18);
+                
+                // Vérifier allowance
+                const allowance = await usdtContract.allowance(state.account, PANCAKE_ROUTER);
+                console.log('📊 Allowance actuelle:', ethers.utils.formatUnits(allowance, 18));
+                
+                if (allowance.lt(amountIn)) {
+                    console.log('✍️ Approval nécessaire...');
+                    const approveTx = await usdtContract.approve(
+                        PANCAKE_ROUTER, 
+                        ethers.constants.MaxUint256
+                    );
+                    console.log('⏳ Attente confirmation approval:', approveTx.hash);
+                    await approveTx.wait();
+                    console.log('✅ Approval confirmée');
+                }
+                
+                // Path: USDT -> Token
+                const path = [USDT_CONTRACT, tokenAddress];
+                
+                // Calculer montant minimum avec slippage 1%
+                const amountsOut = await routerContract.getAmountsOut(amountIn, path);
+                const amountOutMin = amountsOut[1].mul(99).div(100); // 1% slippage
+                
+                // Deadline: 20 minutes
+                const deadline = Math.floor(Date.now() / 1000) + 60 * 20;
+                
+                console.log('💱 Swap USDT -> Token...');
+                console.log('   Amount In:', ethers.utils.formatUnits(amountIn, 18), 'USDT');
+                console.log('   Amount Out Min:', ethers.utils.formatUnits(amountOutMin, 18), 'Token');
+                
+                state.realTrading.pendingTx = true;
+                
+                const swapTx = await routerContract.swapExactTokensForTokens(
+                    amountIn,
+                    amountOutMin,
+                    path,
+                    state.account,
+                    deadline,
+                    { gasLimit: 300000 }
+                );
+                
+                console.log('⏳ Transaction envoyée:', swapTx.hash);
+                const receipt = await swapTx.wait();
+                
+                state.realTrading.pendingTx = false;
+                
+                console.log('✅ ACHAT confirmé!');
+                console.log('📝 Gas utilisé:', receipt.gasUsed.toString());
+                
+                return swapTx.hash;
+                
+            } catch (error) {
+                state.realTrading.pendingTx = false;
+                console.error('❌ Erreur achat:', error);
+                throw error;
+            }
+        }
+
+        // VENDRE sur PancakeSwap
+        async function executeSellOnPancakeSwap(signer, tokenAddress, usdtAmount) {
+            try {
+                console.log('🔄 Préparation vente PancakeSwap...');
+                
+                const routerContract = new ethers.Contract(PANCAKE_ROUTER, ROUTER_ABI, signer);
+                const tokenContract = new ethers.Contract(tokenAddress, ERC20_ABI, signer);
+                
+                // Récupérer balance token
+                const tokenBalance = await tokenContract.balanceOf(state.account);
+                console.log('💰 Balance Token:', ethers.utils.formatUnits(tokenBalance, 18));
+                
+                if (tokenBalance.eq(0)) {
+                    throw new Error('Aucun token à vendre');
+                }
+                
+                // Utiliser tout le balance
+                const amountIn = tokenBalance;
+                
+                // Vérifier allowance
+                const allowance = await tokenContract.allowance(state.account, PANCAKE_ROUTER);
+                
+                if (allowance.lt(amountIn)) {
+                    console.log('✍️ Approval Token nécessaire...');
+                    const approveTx = await tokenContract.approve(
+                        PANCAKE_ROUTER,
+                        ethers.constants.MaxUint256
+                    );
+                    console.log('⏳ Attente confirmation approval:', approveTx.hash);
+                    await approveTx.wait();
+                    console.log('✅ Approval confirmée');
+                }
+                
+                // Path: Token -> USDT
+                const path = [tokenAddress, USDT_CONTRACT];
+                
+                // Calculer montant minimum avec slippage 1%
+                const amountsOut = await routerContract.getAmountsOut(amountIn, path);
+                const amountOutMin = amountsOut[1].mul(99).div(100);
+                
+                const deadline = Math.floor(Date.now() / 1000) + 60 * 20;
+                
+                console.log('💱 Swap Token -> USDT...');
+                console.log('   Amount In:', ethers.utils.formatUnits(amountIn, 18), 'Token');
+                console.log('   Amount Out Min:', ethers.utils.formatUnits(amountOutMin, 18), 'USDT');
+                
+                state.realTrading.pendingTx = true;
+                
+                const swapTx = await routerContract.swapExactTokensForTokens(
+                    amountIn,
+                    amountOutMin,
+                    path,
+                    state.account,
+                    deadline,
+                    { gasLimit: 300000 }
+                );
+                
+                console.log('⏳ Transaction envoyée:', swapTx.hash);
+                const receipt = await swapTx.wait();
+                
+                state.realTrading.pendingTx = false;
+                
+                console.log('✅ VENTE confirmée!');
+                console.log('📝 Gas utilisé:', receipt.gasUsed.toString());
+                
+                return swapTx.hash;
+                
+            } catch (error) {
+                state.realTrading.pendingTx = false;
+                console.error('❌ Erreur vente:', error);
+                throw error;
+            }
         }
 
         function renderTrades() {
@@ -802,10 +1096,11 @@
                             <div class="flex items-center gap-2 mb-1">
                                 <p class="font-bold text-lg">${t.type === 'BUY' ? 'ACHAT IA' : 'VENTE IA'}</p>
                                 <span class="text-xs bg-purple-400/20 text-purple-400 px-2 py-0.5 rounded font-bold">${t.pair}</span>
-                                ${t.mode === 'real' ? '<span class="text-xs bg-orange-400/20 text-orange-400 px-2 py-0.5 rounded">RÉEL</span>' : '<span class="text-xs bg-blue-400/20 text-blue-400 px-2 py-0.5 rounded">SIM</span>'}
+                                ${t.mode === 'real' ? '<span class="text-xs bg-orange-400/20 text-orange-400 px-2 py-0.5 rounded">💎 RÉEL</span>' : '<span class="text-xs bg-blue-400/20 text-blue-400 px-2 py-0.5 rounded">🎮 SIM</span>'}
                             </div>
                             <p class="text-xs text-gray-400 mb-1">${t.date} ${t.time} • ${t.amount} USDT • Confiance ${t.confidence}%</p>
                             <p class="text-xs text-purple-300 italic">"${t.reason}"</p>
+                            ${t.txHash ? `<a href="https://bscscan.com/tx/${t.txHash}" target="_blank" class="text-xs text-blue-400 hover:text-blue-300 underline">📝 Voir sur BSCScan</a>` : ''}
                         </div>
                     </div>
                     <div class="text-right">
